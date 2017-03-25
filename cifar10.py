@@ -50,7 +50,7 @@ FLAGS = tf.app.flags.FLAGS
 # Basic model parameters.
 tf.app.flags.DEFINE_integer('batch_size', 128,
                             """Number of images to process in a batch.""")
-tf.app.flags.DEFINE_string('data_dir', '/tmp/cifar10_data',
+tf.app.flags.DEFINE_string('data_dir', './tmp/cifar10_data',
                            """Path to the CIFAR-10 data directory.""")
 tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
@@ -185,7 +185,7 @@ def inputs(eval_data):
   return images, labels
 
 
-def inference(images):
+def inference(images, eval=False):
   """Build the CIFAR-10 model.
 
   Args:
@@ -267,6 +267,10 @@ def inference(images):
                               tf.constant_initializer(0.0))
     softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
     _activation_summary(softmax_linear)
+
+    #Check if inference is for eval(), if during an eval step normalize the logits!
+    if eval:
+      softmax_linear = tf.nn.softmax(softmax_linear)
 
   return softmax_linear
 
