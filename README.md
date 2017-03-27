@@ -11,13 +11,18 @@ This section briefly describes the files I added in order to use the cifar10 net
 Divides a directory of files in to train/validation/test sets.
 
 The data set is expected to reside in files located in the
-following directory structure.
+following directory structure:
 
   data_dir/label_0/image0.jpeg
+
   data_dir/label_0/image1.jpg
+
   ...
+
   data_dir/label_1/weird-image.jpeg
+
   data_dir/label_1/my-image.jpeg
+
   ...
 
 where the sub-directory is the unique label associated with these files.
