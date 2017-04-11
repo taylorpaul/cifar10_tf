@@ -30,9 +30,9 @@ import tensorflow as tf
 IMAGE_SIZE = 24
 
 # Global constants describing the CIFAR-10 data set.
-NUM_CLASSES = 10
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
+NUM_CLASSES = 2 #other, screenshot
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 2916 + 1936 # train/other + train/screenshot
+NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 364 + 242 # validation/other + validation/screenshot
 
 
 def read_cifar10(filename_queue):
@@ -64,36 +64,82 @@ def read_cifar10(filename_queue):
   # Dimensions of the images in the CIFAR-10 dataset.
   # See http://www.cs.toronto.edu/~kriz/cifar.html for a description of the
   # input format.
-  label_bytes = 1  # 2 for CIFAR-100
-  result.height = 32
-  result.width = 32
-  result.depth = 3
-  image_bytes = result.height * result.width * result.depth
-  # Every record consists of a label followed by the image, with a
-  # fixed number of bytes for each.
-  record_bytes = label_bytes + image_bytes
+  # label_bytes = 1  # 2 for CIFAR-100
+  # result.height = 32
+  # result.width = 32
+  # result.depth = 3
+  # image_bytes = result.height * result.width * result.depth
+  # # Every record consists of a label followed by the image, with a
+  # # fixed number of bytes for each.
+  # record_bytes = label_bytes + image_bytes
 
   # Read a record, getting filenames from the filename_queue.  No
   # header or footer in the CIFAR-10 format, so we leave header_bytes
   # and footer_bytes at their default of 0.
-  reader = tf.FixedLengthRecordReader(record_bytes=record_bytes)
+  reader =  tf.TFRecordReader()
+
+  #REVIEW:
+  #Define the features we want back:
+  feature_dict={
+     'image/height': tf.FixedLenFeature([1],tf.int64),
+     'image/width': tf.FixedLenFeature([1],tf.int64),
+     'image/colorspace':  tf.VarLenFeature(tf.string),
+     'image/channels': tf.FixedLenFeature([1],tf.int64),
+     'image/class/label': tf.FixedLenFeature([1], dtype=tf.int64,
+                                                default_value=-1),
+     'image/class/text': tf.FixedLenFeature([], dtype=tf.string,
+                                               default_value=''),
+     'image/format': tf.VarLenFeature(tf.string),
+     'image/filename': tf.VarLenFeature(tf.string),
+     'image/encoded': tf.FixedLenFeature([], dtype=tf.string,
+                                            default_value='')
+     }
+
   result.key, value = reader.read(filename_queue)
 
   # Convert from a string to a vector of uint8 that is record_bytes long.
-  record_bytes = tf.decode_raw(value, tf.uint8)
+  #OLD:
+  #record_bytes = tf.parse_single_example(value)
+  #REVIEW:
+  features=tf.parse_single_example(value, feature_dict)
+
+  #Now define the lengths since they vary by image in our dataset:
+
+  label_bytes = 1  # 2 for CIFAR-100
+  result.height = 32
+  result.width = 32
+  result.depth = 3
+
+
+  # Every record consists of a label followed by the image, with a
+  # fixed number of bytes for each.
+  # record_bytes = label_bytes + image_bytes
 
   # The first bytes represent the label, which we convert from uint8->int32.
-  result.label = tf.cast(
-      tf.strided_slice(record_bytes, [0], [label_bytes]), tf.int32)
+
+  #OLD
+  #result.label = tf.cast(
+  #    tf.strided_slice(record_bytes, [-1], [label_bytes]), tf.int32)
+  #REVIEW:
+  result.label = tf.cast(features['image/class/label'], tf.int32)
 
   # The remaining bytes after the label represent the image, which we reshape
   # from [depth * height * width] to [depth, height, width].
+  # depth_major = tf.reshape(
+  #     tf.strided_slice(record_bytes, [label_bytes],
+  #                      [label_bytes + image_bytes]),
+  #     [result.depth, result.height, result.width])
+
+  # # Convert from [depth, height, width] to [height, width, depth].
+  # result.uint8image = tf.transpose(depth_major, [1, 2, 0])
+  #REVIEW:
+  image = tf.decode_raw(features['image/encoded'], tf.uint8)
   depth_major = tf.reshape(
-      tf.strided_slice(record_bytes, [label_bytes],
-                       [label_bytes + image_bytes]),
+      tf.strided_slice(image, [0],
+                       [-1]),
       [result.depth, result.height, result.width])
-  # Convert from [depth, height, width] to [height, width, depth].
-  result.uint8image = tf.transpose(depth_major, [1, 2, 0])
+  result.unit8image = tf.transpose(depth_major, [1, 2, 0])
+  # result.unit8image=features['image/encoded']
 
   return result
 
@@ -148,18 +194,31 @@ def distorted_inputs(data_dir, batch_size):
     images: Images. 4D tensor of [batch_size, IMAGE_SIZE, IMAGE_SIZE, 3] size.
     labels: Labels. 1D tensor of [batch_size] size.
   """
-  filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
-               for i in xrange(1, 6)]
+  # OLD:
+  # filenames = [os.listdir(data_dir)]
+
+  #REVIEW: Changed to read in my tfrecord files
+  filenames = [os.path.join(data_dir, 'train-0000%d-of-00002' % i) for i in xrange(0, 2)]
   for f in filenames:
     if not tf.gfile.Exists(f):
       raise ValueError('Failed to find file: ' + f)
 
   # Create a queue that produces the filenames to read.
-  filename_queue = tf.train.string_input_producer(filenames)
+  num_examples_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
+
+  #REVIEW: !!!! I edited this portion of the file before using the review tags, so there is some original code missing and undocumented changes!!!!
+
+
+  #filename queue:
+  filename_queue = tf.train.string_input_producer(filenames,
+                                                     shuffle=True,
+                                                     capacity=16)
 
   # Read examples from files in the filename queue.
   read_input = read_cifar10(filename_queue)
-  reshaped_image = tf.cast(read_input.uint8image, tf.float32)
+  int_image = tf.cast(read_input.unit8image, tf.int32)
+  reshaped_image = tf.cast(int_image, tf.float32)
+  #REVIEW:
 
   height = IMAGE_SIZE
   width = IMAGE_SIZE
@@ -213,11 +272,19 @@ def inputs(eval_data, data_dir, batch_size):
     labels: Labels. 1D tensor of [batch_size] size.
   """
   if not eval_data:
-    filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
-                 for i in xrange(1, 6)]
+    #OLD:
+    # filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
+    #              for i in xrange(1, 6)]
+
+    #REVIEW:
+    filenames=[os.path.join(data_dir, 'train-0000%d-of-00002' % i) for i in xrange(0, 2)]
+
     num_examples_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
   else:
-    filenames = [os.path.join(data_dir, 'test_batch.bin')]
+    #OLD:
+    # filenames = [os.path.join(data_dir, 'test_batch.bin')]
+    #REVIEW:
+    filenames=[os.path.join(data_dir, 'validation-0000%d-of-00002' % i) for i in xrange(0, 2)]
     num_examples_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
   for f in filenames:

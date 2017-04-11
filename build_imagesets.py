@@ -70,7 +70,7 @@ def _file_count(dirname):
   return count_dictionary
 
 
-def _choose_files(dirname, count_dict, dir_percentages=[80,10,10]):
+def _choose_files(dirname, count_dict, dir_percentages):
 
   """
   Randomly choose a percentage of files from multiple sub-directories of dirname (str) variable.
@@ -160,14 +160,20 @@ def _make_dirs(dirname, dir_percentages, label_dirs):
     train_dir=os.path.join(dirname, "train")
     os.makedirs(train_dir, exist_ok=True)
     print("Created Directory: ", train_dir)
+  else:
+    train_dir=""
   if dir_percentages[1]:
     valid_dir=os.path.join(dirname, "validation")
     os.makedirs(valid_dir, exist_ok=True)
     print("Created Directory: ", valid_dir)
+  else:
+    valid_dir=""
   if dir_percentages[2]:
     test_dir=os.path.join(dirname, "test")
     os.makedirs(test_dir, exist_ok=True)
     print("Created Directory: ", test_dir)
+  else:
+    test_dir=""
 
   dir_list = [train_dir, valid_dir, test_dir]
 
@@ -213,7 +219,8 @@ def _move_files(original_dirs, new_dirs, file_list_dict):
       shutil.move(os.path.join(key, train_file), train_dest)
       train_count +=1
 
-    print( train_count, " files moved to ", train_dest )
+    if train_count:
+      print( train_count, " files moved to ", train_dest )
 
     #Move Validation Images from other and screenshot:
     valid_count=0
@@ -222,7 +229,8 @@ def _move_files(original_dirs, new_dirs, file_list_dict):
       shutil.move(os.path.join(key, valid_file), valid_dest)
       valid_count += 1
 
-    print( valid_count, " files moved to ", valid_dest )
+    if valid_count:
+      print( valid_count, " files moved to ", valid_dest )
 
     #Move Test Images from other and screenshot:
     test_count = 0
@@ -231,7 +239,8 @@ def _move_files(original_dirs, new_dirs, file_list_dict):
       shutil.move(os.path.join(key, test_file), test_dest)
       test_count += 1
 
-    print( test_count, " files moved to ", test_dest )
+    if test_count:
+      print( test_count, " files moved to ", test_dest )
 
     #Remove the now empty directory:
     try:
@@ -243,7 +252,7 @@ def _move_files(original_dirs, new_dirs, file_list_dict):
   return
 
 
-def main(dirname, set_percentages=[90,10,0]):
+def main(dirname, set_percentages):
 
   #Get a count of the files in the sub-directories of dirname:
   file_count_dict = _file_count(dirname)
@@ -257,7 +266,7 @@ def main(dirname, set_percentages=[90,10,0]):
     print(key_list)
 
   #From the files found, develop train, validation, and test lists:
-  file_list_dict = _choose_files(dirname, file_count_dict)
+  file_list_dict = _choose_files(dirname, file_count_dict, set_percentages)
 
   #Make required new directories:
   new_dirs = _make_dirs(dirname, set_percentages, key_list)
@@ -276,8 +285,15 @@ def main(dirname, set_percentages=[90,10,0]):
 
 if __name__ == '__main__':
   dirname = argv[1]
-  if argv[2]:
-    set_percentages = argv[2]
-  else:
-    set_percentages = [90,10,0]
+  set_percentages = []
+
+  try:
+    set_percentages.append( int(argv[2]) )
+    set_percentages.append( int(argv[3]) )
+    set_percentages.append( int(argv[4]) )
+    print(set_percentages)
+  except:
+    print("Not enough set percentages provided, using default 80/10/10 Train/Valid/Test split!!!")
+    set_percentages = [90, 10, 0]
+
   main(dirname, set_percentages)
